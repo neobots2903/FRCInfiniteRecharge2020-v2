@@ -155,6 +155,7 @@ public class Robot extends TimedRobot {
   public void teleopInit() {
     shooterSubsystem.intakeOpen();
     shooterSubsystem.shooterBlock();
+    shooterSubsystem.zeroShooterAngle();
     swerveDriveSubsystem.zeroModulesLimit();
   }
 
@@ -175,8 +176,8 @@ public class Robot extends TimedRobot {
     boolean driveReZero = driveJoy.getRawButton(4); //Y
 
     double shooterSpeed = opJoy.getRawAxis(3)*10; //Right Trigger
-    boolean intakeIn = opJoy.getRawButton(1); //A
-    boolean intakeOut = opJoy.getRawButton(2); //B
+    double intakeSpeed = opJoy.getRawAxis(5); //Right Stick Y
+    boolean shooterAuto = opJoy.getRawButton(1); //A
     boolean climbSafety = opJoy.getRawButton(8); //Start
     boolean climbRaise = opJoy.getRawButton(7); //Back
     boolean climbExtend = opJoy.getRawButton(6); //Right Bumper
@@ -207,14 +208,13 @@ public class Robot extends TimedRobot {
     
     swerveDriveSubsystem.swerveDrive(drivePower, driveAngle, driveTurn, isFieldCentric);
 
-    shooterSubsystem.shootSpeed(shooterSpeed);
-
-    if (intakeIn)
-      shooterSubsystem.intake(1);
-    else if (intakeOut)
-      shooterSubsystem.intake(-1);
-    else
-      shooterSubsystem.intake(0);
+    if (shooterAuto) {
+      shooterSubsystem.shooting(lidarSubsystem.getDistance(), 1);
+    } else {
+      shooterSubsystem.shootSpeed(shooterSpeed);
+      shooterSubsystem.setAngle(45);
+    }
+    shooterSubsystem.intake(intakeSpeed);
 
     if (climbSafety) {
       if (climbRaise)
