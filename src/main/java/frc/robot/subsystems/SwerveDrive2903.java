@@ -2,9 +2,6 @@ package frc.robot.subsystems;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import com.ctre.phoenix.motorcontrol.ControlMode;
 
@@ -32,8 +29,7 @@ public class SwerveDrive2903 {
 
     public SwerveDrive2903() {
         LeftFront = new SwerveModule2903(RobotMap.LeftFrontForward, RobotMap.LeftFrontTurn, RobotMap.LeftFrontLimit);
-        RightFront = new SwerveModule2903(RobotMap.RightFrontForward, RobotMap.RightFrontTurn,
-                RobotMap.RightFrontLimit);
+        RightFront = new SwerveModule2903(RobotMap.RightFrontForward, RobotMap.RightFrontTurn, RobotMap.RightFrontLimit);
         RightRear = new SwerveModule2903(RobotMap.RightRearForward, RobotMap.RightRearTurn, RobotMap.RightRearLimit);
         LeftRear = new SwerveModule2903(RobotMap.LeftRearForward, RobotMap.LeftRearTurn, RobotMap.LeftRearLimit);
 
@@ -50,22 +46,7 @@ public class SwerveDrive2903 {
 
     public void zeroModulesLimit() {
         SmartDashboard.putBoolean("Zeroin'", true);
-        // ExecutorService es = Executors.newCachedThreadPool();
-        // for (SwerveModule2903 module : modules) {
-        //     es.execute(new Runnable() {
-        //         @Override
-        //         public void run() {
-        //             module.zeroTurnMotor();
-        //         }
-        //     });
-        // }
-        // es.shutdown();
-        // try {
-        //     es.awaitTermination(5, TimeUnit.SECONDS);
-        // } catch (InterruptedException e) {
-        //     // TODO Auto-generated catch block
-        //     e.printStackTrace();
-        // }
+
         ArrayList<Thread> threads = new ArrayList<Thread>();
         for (SwerveModule2903 module : modules) {
             threads.add(new Thread(() -> {
@@ -82,16 +63,19 @@ public class SwerveDrive2903 {
                 e.printStackTrace();
             }
         }
+
         isForward = true;
         SmartDashboard.putBoolean("Zeroin'",false);
+        targetAngle = 0;
         for (SwerveModule2903 module : modules) {
             module.TurnMotor.set(ControlMode.Position,0);
         }
     }
 
     public void zeroModules() {
+        targetAngle = 0;
         for (SwerveModule2903 module : modules) {
-            module.setZero();
+            module.setEncoder(0);
             module.TurnMotor.set(ControlMode.Position,0);
         }
     }

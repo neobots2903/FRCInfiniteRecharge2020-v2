@@ -9,9 +9,13 @@ package frc.robot;
 
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.TimedRobot;
+import edu.wpi.first.wpilibj.controller.PIDController;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpiutil.math.MathUtil;
 import frc.robot.subsystems.Climb2903;
+import frc.robot.subsystems.LidarLite2903;
+import frc.robot.subsystems.Limelight2903;
 import frc.robot.subsystems.NavX2903;
 import frc.robot.subsystems.Shooter2903;
 import frc.robot.subsystems.SwerveDrive2903;
@@ -37,6 +41,10 @@ public class Robot extends TimedRobot {
   public static NavX2903 navXSubsystem;
   public static Shooter2903 shooterSubsystem;
   public static SwerveDrive2903 swerveDriveSubsystem;
+  public static Limelight2903 limelightSubsystem;
+  public static LidarLite2903 lidarSubsystem;
+
+  public PIDController visionTurn;
 
   /**
    * This function is run when the robot is first started up and should be
@@ -48,6 +56,11 @@ public class Robot extends TimedRobot {
     navXSubsystem = new NavX2903();
     shooterSubsystem = new Shooter2903();
     swerveDriveSubsystem = new SwerveDrive2903();
+    limelightSubsystem = new Limelight2903();
+    lidarSubsystem = new LidarLite2903(RobotMap.LidarLiteV3);
+    visionTurn = new PIDController(0.1, 0, 0);
+
+    limelightSubsystem.setLight(false);
 
     m_chooser.setDefaultOption("Default Auto", kDefaultAuto);
     m_chooser.addOption("My Auto", kCustomAuto);
@@ -67,6 +80,32 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void robotPeriodic() {
+    SmartDashboard.putNumber("LF Deg", swerveDriveSubsystem.LeftFront.getAbsoluteTurnDegrees());
+    SmartDashboard.putNumber("LR Deg", swerveDriveSubsystem.LeftRear.getAbsoluteTurnDegrees());
+    SmartDashboard.putNumber("RF Deg", swerveDriveSubsystem.RightFront.getAbsoluteTurnDegrees());
+    SmartDashboard.putNumber("RR Deg", swerveDriveSubsystem.RightRear.getAbsoluteTurnDegrees());
+
+    SmartDashboard.putBoolean("LF on zero?", swerveDriveSubsystem.LeftFront.getLimit());
+    SmartDashboard.putBoolean("LR on zero?", swerveDriveSubsystem.LeftRear.getLimit());
+    SmartDashboard.putBoolean("RF on zero?", swerveDriveSubsystem.RightFront.getLimit());
+    SmartDashboard.putBoolean("RR on zero?", swerveDriveSubsystem.RightRear.getLimit());
+
+    SmartDashboard.putNumber("LF FW M", swerveDriveSubsystem.LeftFront.getForwardMeters());
+    SmartDashboard.putNumber("LR FW M", swerveDriveSubsystem.LeftRear.getForwardMeters());
+    SmartDashboard.putNumber("RF FW M", swerveDriveSubsystem.RightFront.getForwardMeters());
+    SmartDashboard.putNumber("RR FW M", swerveDriveSubsystem.RightRear.getForwardMeters());
+
+    SmartDashboard.putNumber("Shooter Angle", shooterSubsystem.getAngle());
+    SmartDashboard.putNumber("Angle Amp", shooterSubsystem.getAngleCurrent());
+    SmartDashboard.putNumber("Shooter Speed", shooterSubsystem.getCurrentSpeed());
+    SmartDashboard.putNumber("Shooter Speed Left", shooterSubsystem.getLeftSpeed());
+    SmartDashboard.putNumber("Shooter Speed Right", shooterSubsystem.getRightSpeed());
+
+    SmartDashboard.putBoolean("Shooter top", shooterSubsystem.getTop());
+    SmartDashboard.putBoolean("Shooter bottom", shooterSubsystem.getBottom());
+
+    SmartDashboard.putNumber("Lidar Distance", lidarSubsystem.getDistance());
+    SmartDashboard.putNumber("Gyro Angle", navXSubsystem.turnAngle());
   }
 
   /**
@@ -103,7 +142,7 @@ public class Robot extends TimedRobot {
           double startTime = System.currentTimeMillis();
           double driveTime = 500; //milliseconds
           while (System.currentTimeMillis() < startTime + driveTime) {
-            swerveDriveSubsystem.TankDrive(-1, -1);
+            swerveDriveSubsystem.TankDrive(1, 1);
           }
           swerveDriveSubsystem.stopDrive();
           autoFinished = true;
@@ -116,36 +155,79 @@ public class Robot extends TimedRobot {
   public void teleopInit() {
     shooterSubsystem.intakeOpen();
     shooterSubsystem.shooterBlock();
+    swerveDriveSubsystem.zeroModulesLimit();
   }
+
+  boolean isFieldCentric = false;
+  boolean driveFieldCentricLock = false;
+  boolean driveReZeroLock = false;
 
   /**
    * This function is called periodically during operator control.
    */
   @Override
   public void teleopPeriodic() {
-    swerveDriveSubsystem.TankDrive(driveJoy.getRawAxis(1), driveJoy.getRawAxis(5));
+    double drivePower = driveJoy.getRawAxis(3) - driveJoy.getRawAxis(2); //Right Trigger - Left Trigger
+    double driveAngle = swerveDriveSubsystem.joystickAngle(driveJoy.getRawAxis(0), driveJoy.getRawAxis(1)); //Left Stick
+    double driveTurn = driveJoy.getRawAxis(4); //Right Stick X
+    boolean driveAutoAim = driveJoy.getRawButton(2); //B
+    boolean driveFieldCentric = driveJoy.getRawButton(8); //Start
+    boolean driveReZero = driveJoy.getRawButton(4); //Y
 
-    shooterSubsystem.shootSpeed(opJoy.getRawAxis(3)*10);
+    double shooterSpeed = opJoy.getRawAxis(3)*10; //Right Trigger
+    boolean intakeIn = opJoy.getRawButton(1); //A
+    boolean intakeOut = opJoy.getRawButton(2); //B
+    boolean climbSafety = opJoy.getRawButton(8); //Start
+    boolean climbRaise = opJoy.getRawButton(7); //Back
+    boolean climbExtend = opJoy.getRawButton(6); //Right Bumper
+    boolean climbRetract = opJoy.getRawButton(5); //Left Bumper
+    boolean shooterUnblock = opJoy.getRawButton(3); //X
+    boolean shooterBlock = opJoy.getRawButton(4); //Y
 
-    if (opJoy.getRawButton(1))
+    if (driveAutoAim && limelightSubsystem.getTV() == 1) {
+      limelightSubsystem.setLight(true);
+      driveTurn = MathUtil.clamp(visionTurn.calculate(limelightSubsystem.getTX(), 0),-1,1);
+    } else {
+        limelightSubsystem.setLight(false);
+    }
+
+    if (driveReZero) {
+      if (!driveReZeroLock) {
+        swerveDriveSubsystem.zeroModulesLimit();
+        driveReZeroLock = true;
+      }
+    } else driveReZeroLock = false;
+
+    if (driveFieldCentric) {
+      if (!driveFieldCentricLock) {
+        isFieldCentric = !isFieldCentric;
+        driveFieldCentricLock = true;
+      }
+    } else driveFieldCentricLock = false;
+    
+    swerveDriveSubsystem.swerveDrive(drivePower, driveAngle, driveTurn, isFieldCentric);
+
+    shooterSubsystem.shootSpeed(shooterSpeed);
+
+    if (intakeIn)
       shooterSubsystem.intake(1);
-    else if (opJoy.getRawButton(2))
+    else if (intakeOut)
       shooterSubsystem.intake(-1);
     else
       shooterSubsystem.intake(0);
 
-    if (opJoy.getRawButton(8)) {
-      if (opJoy.getRawButton(7))
+    if (climbSafety) {
+      if (climbRaise)
         climbSubsystem.RaiseArms();
-      else if(opJoy.getRawButton(6))
+      else if(climbExtend)
         climbSubsystem.ExtendArms();
-      else if (opJoy.getRawButton(5))
+      else if (climbRetract)
         climbSubsystem.RetractArms();
     }
 
-    if(opJoy.getRawButton(3))
+    if(shooterUnblock)
       shooterSubsystem.shooterUnblock();
-    else if (opJoy.getRawButton(4))
+    else if (shooterBlock)
       shooterSubsystem.shooterBlock();
   }
 

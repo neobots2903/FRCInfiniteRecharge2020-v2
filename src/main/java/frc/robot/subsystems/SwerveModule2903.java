@@ -28,7 +28,7 @@ public class SwerveModule2903 {
     TurnMotor = new WPI_TalonSRX(turnMotorId);
     limit = new DigitalInput(limitId);
     
-    ForwardMotor.setInverted(false);
+    ForwardMotor.setInverted(true);
     ForwardMotor.setSmartCurrentLimit(40);
 
     TurnMotor.configSelectedFeedbackSensor(FeedbackDevice.QuadEncoder, kPIDLoopIdx, kTimeoutMs);
@@ -37,12 +37,9 @@ public class SwerveModule2903 {
     TurnMotor.configPeakCurrentDuration(750, 0);
     TurnMotor.configContinuousCurrentLimit(0, 0);
     TurnMotor.configVoltageCompSaturation(6);
-
-    // setZero();
-    setEncoder(0);
-
     setPowerPercent(1); // set max turn power to just 100%;
-    // TurnMotor.set(ControlMode.Position, getTurnTicks());
+
+    setEncoder(0);
     TurnMotor.config_kP(0, 0.75);
   }
 
@@ -65,17 +62,6 @@ public class SwerveModule2903 {
       TurnMotor.set(ControlMode.PercentOutput, 0);
     }
     setEncoder(0);
-  }
-
-  public void setZero() {
-    /**
-     * Grab the 360 degree position of the MagEncoder's absolute
-     * position, and intitally set the relative sensor to match.
-     */
-    int absolutePosition = TurnMotor.getSensorCollection().getPulseWidthPosition();
-    /* Mask out overflows, keep bottom 12 bits */
-    absolutePosition &= 0xFFF;
-    setEncoder(absolutePosition);
   }
 
   public void setEncoder(int newPos) {
