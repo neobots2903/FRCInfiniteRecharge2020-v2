@@ -7,9 +7,14 @@
 
 package frc.robot;
 
+import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import frc.robot.subsystems.Climb2903;
+import frc.robot.subsystems.NavX2903;
+import frc.robot.subsystems.Shooter2903;
+import frc.robot.subsystems.SwerveDrive2903;
 
 /**
  * The VM is configured to automatically run this class, and to call the
@@ -23,6 +28,15 @@ public class Robot extends TimedRobot {
   private static final String kCustomAuto = "My Auto";
   private String m_autoSelected;
   private final SendableChooser<String> m_chooser = new SendableChooser<>();
+  private boolean autoFinished = false;
+
+  Joystick driveJoy = new Joystick(0);
+  Joystick opJoy = new Joystick(1);
+
+  public static Climb2903 climbSubsystem;
+  public static NavX2903 navXSubsystem;
+  public static Shooter2903 shooterSubsystem;
+  public static SwerveDrive2903 swerveDriveSubsystem;
 
   /**
    * This function is run when the robot is first started up and should be
@@ -30,9 +44,17 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void robotInit() {
+    climbSubsystem = new Climb2903();
+    navXSubsystem = new NavX2903();
+    shooterSubsystem = new Shooter2903();
+    swerveDriveSubsystem = new SwerveDrive2903();
+
     m_chooser.setDefaultOption("Default Auto", kDefaultAuto);
     m_chooser.addOption("My Auto", kCustomAuto);
     SmartDashboard.putData("Auto choices", m_chooser);
+  
+    climbSubsystem.RetractArms();
+    climbSubsystem.LowerArms();
   }
 
   /**
@@ -63,6 +85,7 @@ public class Robot extends TimedRobot {
     m_autoSelected = m_chooser.getSelected();
     // m_autoSelected = SmartDashboard.getString("Auto Selector", kDefaultAuto);
     System.out.println("Auto selected: " + m_autoSelected);
+    autoFinished = false;
   }
 
   /**
@@ -70,15 +93,29 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void autonomousPeriodic() {
-    switch (m_autoSelected) {
-      case kCustomAuto:
-        // Put custom auto code here
-        break;
-      case kDefaultAuto:
-      default:
-        // Put default auto code here
-        break;
+    if (!autoFinished) {
+      switch (m_autoSelected) {
+        case kCustomAuto:
+          // Put custom auto code here
+          break;
+        case kDefaultAuto:
+        default:
+          double startTime = System.currentTimeMillis();
+          double driveTime = 500; //milliseconds
+          while (System.currentTimeMillis() < startTime + driveTime) {
+            swerveDriveSubsystem.TankDrive(-1, -1);
+          }
+          swerveDriveSubsystem.stopDrive();
+          autoFinished = true;
+          break;
+      }
     }
+  }
+
+  @Override
+  public void teleopInit() {
+    shooterSubsystem.intakeOpen();
+    shooterSubsystem.shooterBlock();
   }
 
   /**
@@ -86,6 +123,30 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void teleopPeriodic() {
+    swerveDriveSubsystem.TankDrive(driveJoy.getRawAxis(1), driveJoy.getRawAxis(5));
+
+    shooterSubsystem.shootSpeed(opJoy.getRawAxis(3)*10);
+
+    if (opJoy.getRawButton(1))
+      shooterSubsystem.intake(1);
+    else if (opJoy.getRawButton(2))
+      shooterSubsystem.intake(-1);
+    else
+      shooterSubsystem.intake(0);
+
+    if (opJoy.getRawButton(8)) {
+      if (opJoy.getRawButton(7))
+        climbSubsystem.RaiseArms();
+      else if(opJoy.getRawButton(6))
+        climbSubsystem.ExtendArms();
+      else if (opJoy.getRawButton(5))
+        climbSubsystem.RetractArms();
+    }
+
+    if(opJoy.getRawButton(3))
+      shooterSubsystem.shooterUnblock();
+    else if (opJoy.getRawButton(4))
+      shooterSubsystem.shooterBlock();
   }
 
   /**
