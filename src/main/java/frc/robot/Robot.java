@@ -12,7 +12,6 @@ import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.controller.PIDController;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
-import edu.wpi.first.wpiutil.math.MathUtil;
 import frc.robot.subsystems.Climb2903;
 import frc.robot.subsystems.LidarLite2903;
 import frc.robot.subsystems.Limelight2903;
@@ -34,8 +33,10 @@ public class Robot extends TimedRobot {
   private final SendableChooser<String> m_chooser = new SendableChooser<>();
   private boolean autoFinished = false;
 
-  Joystick driveJoy = new Joystick(0);
-  Joystick opJoy = new Joystick(1);
+  public static Joystick driveJoy = new Joystick(0);
+  public static Joystick opJoy = new Joystick(1);
+
+  public static Teleop2093 teleop2903;
 
   public static Climb2903 climbSubsystem;
   public static NavX2903 navXSubsystem;
@@ -44,7 +45,7 @@ public class Robot extends TimedRobot {
   public static Limelight2903 limelightSubsystem;
   public static LidarLite2903 lidarSubsystem;
 
-  public PIDController visionTurn;
+  public static PIDController visionTurn;
 
   /**
    * This function is run when the robot is first started up and should be
@@ -52,6 +53,8 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void robotInit() {
+
+
     climbSubsystem = new Climb2903();
     navXSubsystem = new NavX2903();
     shooterSubsystem = new Shooter2903();
@@ -159,76 +162,12 @@ public class Robot extends TimedRobot {
     swerveDriveSubsystem.zeroModulesLimit();
   }
 
-  boolean isFieldCentric = false;
-  boolean driveFieldCentricLock = false;
-  boolean driveReZeroLock = false;
-
   /**
    * This function is called periodically during operator control.
    */
   @Override
   public void teleopPeriodic() {
-    double drivePower = driveJoy.getRawAxis(3) - driveJoy.getRawAxis(2); //Right Trigger - Left Trigger
-    double driveAngle = swerveDriveSubsystem.joystickAngle(driveJoy.getRawAxis(0), driveJoy.getRawAxis(1)); //Left Stick
-    double driveTurn = driveJoy.getRawAxis(4); //Right Stick X
-    boolean driveAutoAim = driveJoy.getRawButton(2); //B
-    boolean driveFieldCentric = driveJoy.getRawButton(8); //Start
-    boolean driveReZero = driveJoy.getRawButton(4); //Y
-
-    double shooterSpeed = opJoy.getRawAxis(3)*10; //Right Trigger
-    double intakeSpeed = opJoy.getRawAxis(5); //Right Stick Y
-    boolean shooterAuto = opJoy.getRawButton(1); //A
-    boolean climbSafety = opJoy.getRawButton(8); //Start
-    boolean climbRaise = opJoy.getRawButton(7); //Back
-    boolean climbExtend = opJoy.getRawButton(6); //Right Bumper
-    boolean climbRetract = opJoy.getRawButton(5); //Left Bumper
-    boolean shooterUnblock = opJoy.getRawButton(3); //X
-    boolean shooterBlock = opJoy.getRawButton(4); //Y
-
-    if (driveAutoAim && limelightSubsystem.getTV() == 1) {
-      limelightSubsystem.setLight(true);
-      driveTurn = MathUtil.clamp(visionTurn.calculate(limelightSubsystem.getTX(), 0),-1,1);
-    } else {
-        limelightSubsystem.setLight(false);
-    }
-
-    if (driveReZero) {
-      if (!driveReZeroLock) {
-        swerveDriveSubsystem.zeroModulesLimit();
-        driveReZeroLock = true;
-      }
-    } else driveReZeroLock = false;
-
-    if (driveFieldCentric) {
-      if (!driveFieldCentricLock) {
-        isFieldCentric = !isFieldCentric;
-        driveFieldCentricLock = true;
-      }
-    } else driveFieldCentricLock = false;
-    
-    swerveDriveSubsystem.swerveDrive(drivePower, driveAngle, driveTurn, isFieldCentric);
-
-    if (shooterAuto) {
-      shooterSubsystem.shooting(lidarSubsystem.getDistance(), 1);
-    } else {
-      shooterSubsystem.shootSpeed(shooterSpeed);
-      shooterSubsystem.setAngle(45);
-    }
-    shooterSubsystem.intake(intakeSpeed);
-
-    if (climbSafety) {
-      if (climbRaise)
-        climbSubsystem.RaiseArms();
-      else if(climbExtend)
-        climbSubsystem.ExtendArms();
-      else if (climbRetract)
-        climbSubsystem.RetractArms();
-    }
-
-    if(shooterUnblock)
-      shooterSubsystem.shooterUnblock();
-    else if (shooterBlock)
-      shooterSubsystem.shooterBlock();
+    teleop2903.runTeleOp();
   }
 
   /**
