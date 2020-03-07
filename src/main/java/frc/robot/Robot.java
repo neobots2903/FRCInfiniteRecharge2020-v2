@@ -36,7 +36,8 @@ public class Robot extends TimedRobot {
   public static Joystick driveJoy = new Joystick(0);
   public static Joystick opJoy = new Joystick(1);
 
-  public static Teleop2093 teleop2903;
+  public static TeleOp2903 teleOp2903;
+  public static MainAuto2903 mainAuto2903;
 
   public static Climb2903 climbSubsystem;
   public static NavX2903 navXSubsystem;
@@ -64,6 +65,9 @@ public class Robot extends TimedRobot {
     visionTurn = new PIDController(0.1, 0, 0);
 
     limelightSubsystem.setLight(false);
+
+    teleOp2903 = new TeleOp2903();
+    mainAuto2903 = new MainAuto2903();
 
     m_chooser.setDefaultOption("Default Auto", kDefaultAuto);
     m_chooser.addOption("My Auto", kCustomAuto);
@@ -128,6 +132,7 @@ public class Robot extends TimedRobot {
     // m_autoSelected = SmartDashboard.getString("Auto Selector", kDefaultAuto);
     System.out.println("Auto selected: " + m_autoSelected);
     autoFinished = false;
+    mainAuto2903.init();
   }
 
   /**
@@ -135,6 +140,7 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void autonomousPeriodic() {
+
     if (!autoFinished) {
       switch (m_autoSelected) {
         case kCustomAuto:
@@ -142,13 +148,8 @@ public class Robot extends TimedRobot {
           break;
         case kDefaultAuto:
         default:
-          double startTime = System.currentTimeMillis();
-          double driveTime = 500; //milliseconds
-          while (System.currentTimeMillis() < startTime + driveTime) {
-            swerveDriveSubsystem.TankDrive(1, 1);
-          }
-          swerveDriveSubsystem.stopDrive();
-          autoFinished = true;
+          mainAuto2903.run();
+          autoFinished = mainAuto2903.isFinished();
           break;
       }
     }
@@ -167,7 +168,7 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void teleopPeriodic() {
-    teleop2903.runTeleOp();
+    teleOp2903.runTeleOp();
   }
 
   /**
