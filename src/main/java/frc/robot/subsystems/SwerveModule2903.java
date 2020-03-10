@@ -40,7 +40,7 @@ public class SwerveModule2903 {
     setPowerPercent(1); // set max turn power to just 100%;
 
     setEncoder(0);
-    TurnMotor.config_kP(0, 0.75);
+    TurnMotor.config_kP(0, 0.8);
   }
 
   public boolean getLimit() {

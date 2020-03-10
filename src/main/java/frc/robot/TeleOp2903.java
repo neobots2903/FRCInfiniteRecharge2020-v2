@@ -1,29 +1,44 @@
 package frc.robot;
 
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpiutil.math.MathUtil;
 
 public class TeleOp2903 {
 
     boolean isFieldCentric = false;
+    boolean isAutoAim = false;
+    boolean driveAutoAimLock = false;
     boolean driveFieldCentricLock = false;
     boolean driveReZeroLock = false;
+
+    double manualShootAngle = 45;
+    double manualShootAngleLastTime = 0;
   
     public TeleOp2903() { 
+    }
+
+    public void initTeleOp() {
+        Robot.shooterSubsystem.intakeOpen();
+        Robot.climbSubsystem.RetractArms();
+        Robot.climbSubsystem.LowerArms();
+        Robot.shooterSubsystem.shooterBlock();
+        Robot.shooterSubsystem.zeroShooterAngle();
+        Robot.swerveDriveSubsystem.zeroModulesLimit();
     }
   
     public void runTeleOp() {
         double drivePower = Robot.driveJoy.getRawAxis(3) - Robot.driveJoy.getRawAxis(2); // Right Trigger - Left Trigger
         double driveAngle = Robot.swerveDriveSubsystem.joystickAngle(
             Robot.driveJoy.getRawAxis(0), 
-            Robot.driveJoy.getRawAxis(1)
+            -Robot.driveJoy.getRawAxis(1)
         ); // Left Stick
         double driveTurn = Robot.driveJoy.getRawAxis(4); // Right Stick X
         boolean driveAutoAim = Robot.driveJoy.getRawButton(2); // B
         boolean driveFieldCentric = Robot.driveJoy.getRawButton(8); // Start
         boolean driveReZero = Robot.driveJoy.getRawButton(4); // Y
 
-        double shooterSpeed = Robot.opJoy.getRawAxis(3) * 10; // Right Trigger
-        double intakeSpeed = Robot.opJoy.getRawAxis(5); // Right Stick Y
+        double shooterSpeed = Robot.opJoy.getRawAxis(3) * Robot.shooterSubsystem.MAX_VEL; // Right Trigger
+        double intakeSpeed = Robot.opJoy.getRawAxis(5) * 0.5; // Right Stick Y
         boolean shooterAuto = Robot.opJoy.getRawButton(1); // A
         boolean climbSafety = Robot.opJoy.getRawButton(8); // Start
         boolean climbRaise = Robot.opJoy.getRawButton(7); // Back
@@ -31,12 +46,16 @@ public class TeleOp2903 {
         boolean climbRetract = Robot.opJoy.getRawButton(5); // Left Bumper
         boolean shooterUnblock = Robot.opJoy.getRawButton(3); // X
         boolean shooterBlock = Robot.opJoy.getRawButton(4); // Y
+        boolean aimUp = Robot.opJoy.getPOV() == 0; //D-PAD Up
+        boolean aimDown = Robot.opJoy.getPOV() == 180; //D-PAD Down
 
-        if (driveAutoAim && Robot.limelightSubsystem.getTV() == 1) {
-            Robot.limelightSubsystem.setLight(true);
-            driveTurn = MathUtil.clamp(Robot.visionTurn.calculate(Robot.limelightSubsystem.getTX(), 0), -1, 1);
+        if (driveAutoAim) {
+            if (!driveAutoAimLock) {
+                isAutoAim = !isAutoAim;
+                driveAutoAimLock = true;
+            }
         } else {
-            Robot.limelightSubsystem.setLight(false);
+            driveAutoAimLock = false;
         }
 
         if (driveReZero) {
@@ -44,24 +63,49 @@ public class TeleOp2903 {
                 Robot.swerveDriveSubsystem.zeroModulesLimit();
                 driveReZeroLock = true;
             }
-        } else
+        } else {
             driveReZeroLock = false;
+        }
 
         if (driveFieldCentric) {
             if (!driveFieldCentricLock) {
                 isFieldCentric = !isFieldCentric;
                 driveFieldCentricLock = true;
             }
-        } else
+        } else {
             driveFieldCentricLock = false;
+        }
 
-            Robot.swerveDriveSubsystem.swerveDrive(drivePower, driveAngle, driveTurn, isFieldCentric);
+        if (manualShootAngleLastTime + 50 < System.currentTimeMillis()) {
+            if (aimUp && manualShootAngle < Robot.shooterSubsystem.MAX_SHOOT_ANGLE) {
+                manualShootAngle += 0.5;
+                manualShootAngleLastTime = System.currentTimeMillis();
+            } else if (aimDown && manualShootAngle > 0) {
+                manualShootAngle -= 0.5;
+                manualShootAngleLastTime = System.currentTimeMillis();
+            }
+        }
+
+        if (isAutoAim) {
+            Robot.limelightSubsystem.setLight(true);
+            Robot.shooterSubsystem.shooting(Robot.lidarSubsystem.getDistance(), 1, true);
+            if (Robot.limelightSubsystem.getTV() == 1)
+                driveTurn = MathUtil.clamp(Robot.visionTurn.calculate(Robot.limelightSubsystem.getTX(), 0), -0.8, 0.8);
+        } else {
+            Robot.limelightSubsystem.setLight(false);
+        }
+
+        Robot.swerveDriveSubsystem.swerveDrive(drivePower, driveAngle, driveTurn, isFieldCentric);
 
         if (shooterAuto) {
-            Robot.shooterSubsystem.shooting(Robot.lidarSubsystem.getDistance(), 1);
+            Robot.shooterSubsystem.shooting(Robot.lidarSubsystem.getDistance(), 1, false);
         } else {
-            Robot.shooterSubsystem.shootSpeed(shooterSpeed);
-            Robot.shooterSubsystem.setAngle(45);
+            if (shooterSpeed < 0.7) 
+                Robot.shooterSubsystem.stopShoot();
+            else 
+                Robot.shooterSubsystem.shootSpeed(shooterSpeed);
+            if (!isAutoAim) 
+                Robot.shooterSubsystem.setAngle(manualShootAngle);
         }
         Robot.shooterSubsystem.intake(intakeSpeed);
 
@@ -79,5 +123,6 @@ public class TeleOp2903 {
         else if (shooterBlock)
             Robot.shooterSubsystem.shooterBlock();
 
+        SmartDashboard.putBoolean("Auto aim?", isAutoAim);
     }
 }

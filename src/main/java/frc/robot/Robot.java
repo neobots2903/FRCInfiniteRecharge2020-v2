@@ -7,6 +7,10 @@
 
 package frc.robot;
 
+import edu.wpi.cscore.UsbCamera;
+import edu.wpi.first.cameraserver.CameraServer;
+import edu.wpi.first.networktables.NetworkTable;
+import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.controller.PIDController;
@@ -46,7 +50,14 @@ public class Robot extends TimedRobot {
   public static Limelight2903 limelightSubsystem;
   public static LidarLite2903 lidarSubsystem;
 
+  public static NetworkTableInstance ntinst;
+  public static NetworkTable tensorTable;
+  public static NetworkTable sensorTable;
+  
   public static PIDController visionTurn;
+
+  public static CameraServer cserver = CameraServer.getInstance();
+	public static UsbCamera camera;
 
   /**
    * This function is run when the robot is first started up and should be
@@ -62,9 +73,15 @@ public class Robot extends TimedRobot {
     swerveDriveSubsystem = new SwerveDrive2903();
     limelightSubsystem = new Limelight2903();
     lidarSubsystem = new LidarLite2903(RobotMap.LidarLiteV3);
-    visionTurn = new PIDController(0.1, 0, 0);
+    visionTurn = new PIDController(0.04, 0, 0);
 
     limelightSubsystem.setLight(false);
+    navXSubsystem.zero();
+    camera = cserver.startAutomaticCapture();
+
+    ntinst = NetworkTableInstance.getDefault();
+    tensorTable = ntinst.getTable("tensorflow");   
+    sensorTable = ntinst.getTable("sensorTable");
 
     teleOp2903 = new TeleOp2903();
     mainAuto2903 = new MainAuto2903();
@@ -87,6 +104,11 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void robotPeriodic() {
+    SmartDashboard.putNumber("LF Amp", swerveDriveSubsystem.LeftFront.TurnMotor.getStatorCurrent());
+    SmartDashboard.putNumber("LR Amp", swerveDriveSubsystem.LeftRear.TurnMotor.getStatorCurrent());
+    SmartDashboard.putNumber("RF Amp", swerveDriveSubsystem.RightFront.TurnMotor.getStatorCurrent());
+    SmartDashboard.putNumber("RR Amp", swerveDriveSubsystem.RightRear.TurnMotor.getStatorCurrent());
+
     SmartDashboard.putNumber("LF Deg", swerveDriveSubsystem.LeftFront.getAbsoluteTurnDegrees());
     SmartDashboard.putNumber("LR Deg", swerveDriveSubsystem.LeftRear.getAbsoluteTurnDegrees());
     SmartDashboard.putNumber("RF Deg", swerveDriveSubsystem.RightFront.getAbsoluteTurnDegrees());
@@ -157,10 +179,7 @@ public class Robot extends TimedRobot {
 
   @Override
   public void teleopInit() {
-    shooterSubsystem.intakeOpen();
-    shooterSubsystem.shooterBlock();
-    shooterSubsystem.zeroShooterAngle();
-    swerveDriveSubsystem.zeroModulesLimit();
+    teleOp2903.initTeleOp();
   }
 
   /**

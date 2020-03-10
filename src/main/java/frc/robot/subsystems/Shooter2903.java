@@ -21,8 +21,9 @@ public class Shooter2903 {
     final double WHEEL_DIAMETER = 10.16; //cm
     final double ROBOT_SHOOTER_HEIGHT = 0.33782; // m
     final double GOAL_HEIGHT = 2.5 - ROBOT_SHOOTER_HEIGHT; // m
-    final double MAX_VEL = 50; // m/s
-    public final double MAX_SHOOT_ANGLE = 45; // degree
+    final double VEL_MULT = 1.6;
+    public final double MAX_VEL = 20/VEL_MULT; // m/s
+    public final double MAX_SHOOT_ANGLE = 50; // degree
     final double GRAV = 9.80665; // m/s/s
     final double DEG_PER_REV = 360; // degrees per revolution
     final double TICKS_PER_REV = 4096; // ticks per revolution
@@ -59,13 +60,35 @@ public class Shooter2903 {
         shooterWheelL.configSelectedFeedbackSensor(FeedbackDevice.QuadEncoder, kPIDLoopIdx, kTimeoutMs);
         shooterWheelR.configSelectedFeedbackSensor(FeedbackDevice.QuadEncoder, kPIDLoopIdx, kTimeoutMs);
         shooterAngle.configSelectedFeedbackSensor(FeedbackDevice.PulseWidthEncodedPosition, kPIDLoopIdx, kTimeoutMs);
-        shooterWheelL.configVelocityMeasurementPeriod(VelocityMeasPeriod.Period_100Ms);
-        shooterWheelR.configVelocityMeasurementPeriod(VelocityMeasPeriod.Period_100Ms);
-        shooterWheelL.config_kP(0, Double.MAX_VALUE);
-        shooterWheelR.config_kP(0, Double.MAX_VALUE);
+        
+        shooterWheelL.configVelocityMeasurementPeriod(VelocityMeasPeriod.Period_10Ms);
+        shooterWheelR.configVelocityMeasurementPeriod(VelocityMeasPeriod.Period_10Ms);
+        shooterWheelL.configVelocityMeasurementWindow(32);
+        shooterWheelR.configVelocityMeasurementWindow(32);
+
+        shooterWheelL.config_kP(0, 0.14);
+        shooterWheelR.config_kP(0, 0.14);
+        shooterWheelL.config_kI(0, 0.001);
+        shooterWheelR.config_kI(0, 0.001);
+        shooterWheelL.config_kD(0, 0.5);
+        shooterWheelR.config_kD(0, 0.5);
+        shooterWheelL.config_kF(0, 1023.0/25600.0);
+        shooterWheelR.config_kF(0, 1023.0/25600.0);
+
+        shooterWheelL.configNominalOutputForward(0, kTimeoutMs);
+		shooterWheelL.configNominalOutputReverse(0, kTimeoutMs);
+		shooterWheelL.configPeakOutputForward(1, kTimeoutMs);
+        shooterWheelL.configPeakOutputReverse(-1, kTimeoutMs);
+
+        shooterWheelR.configNominalOutputForward(0, kTimeoutMs);
+		shooterWheelR.configNominalOutputReverse(0, kTimeoutMs);
+		shooterWheelR.configPeakOutputForward(1, kTimeoutMs);
+        shooterWheelR.configPeakOutputReverse(-1, kTimeoutMs);
+        
         shooterWheelL.setInverted(false);
         shooterWheelR.setInverted(true);
-        shooterAngle.config_kP(0, 2);
+
+        shooterAngle.config_kP(0, 4);
         shooterAngle.setSelectedSensorPosition(0);
     }
 
@@ -117,11 +140,12 @@ public class Shooter2903 {
     }
 
     public void shootSpeed(double metersPerSec) {
+        metersPerSec *= VEL_MULT;
         lastSetSpeed = metersPerSec;
         double velocity = convertToTalonVelocity(metersPerSec); // calc power
         SmartDashboard.putNumber("Target shoot speed", metersPerSec);
         shooterWheelL.set(ControlMode.Velocity, velocity);
-        shooterWheelR.set(ControlMode.Velocity, -velocity);
+        shooterWheelR.set(ControlMode.Velocity, velocity);
     }
 
     public void stopShoot() {
@@ -145,7 +169,7 @@ public class Shooter2903 {
     }
 
     public double getRightSpeed() {
-        return -convertToMetersPerSec(shooterWheelR.getSelectedSensorVelocity());
+        return convertToMetersPerSec(shooterWheelR.getSelectedSensorVelocity());
     }
 
     public double getCurrentSpeed(){
@@ -158,14 +182,16 @@ public class Shooter2903 {
      * @param timeCorrect standard is 1 || decrease value for faster shoot || it decreases 
      * time automatically when shoot is not possible with current time
      */
-    public void shooting(double distance, double timeCorrect){
+    public void shooting(double distance, double timeCorrect, boolean angleOnly){
         double[] data = shootMath(distance, timeCorrect);
-        if(data[0] == -1) SmartDashboard.putString("ShootError:", "velocity is too big");
-        if(data[1] == -1)SmartDashboard.putString("ShootError:", "angle is too big");
+        if(data[0] == -1) SmartDashboard.putString("Shoot Error:", "velocity is too big");
+        if(data[1] == -1)SmartDashboard.putString("Shoot Error:", "angle is too big");
         if(data[0] >= 0 && data[1] >= 0){
-            SmartDashboard.putString("ShootError:", "none");
-            shootSpeed(data[0]);
+            SmartDashboard.putString("Shoot Error:", "none");
+            if (!angleOnly) shootSpeed(data[0]);
             setAngle(data[1]);
+        } else {
+            stopShoot();
         }
         
     }
@@ -176,7 +202,6 @@ public class Shooter2903 {
         SmartDashboard.putNumber("Target shoot angle", angle);
         double ticks = convertAngleToTicks(angle);
         shooterAngle.set(ControlMode.Position,ticks);
-        SmartDashboard.putNumber("Target shoot angle ticks", ticks);
     }
 
     public double getAngle(){

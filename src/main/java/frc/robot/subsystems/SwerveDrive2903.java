@@ -17,8 +17,9 @@ public class SwerveDrive2903 {
     public SwerveModule2903 LeftRear;
 
     public List<SwerveModule2903> modules = new ArrayList<SwerveModule2903>();
+    int targetTicks = 0;
 
-    final int TICKS_PER_REV = 4096 * 6;
+    final int TURN_TICKS_PER_REV = 4096 * 6;
     final int DEG_PER_REV = 360;
     boolean isForward = true;
 
@@ -29,7 +30,8 @@ public class SwerveDrive2903 {
 
     public SwerveDrive2903() {
         LeftFront = new SwerveModule2903(RobotMap.LeftFrontForward, RobotMap.LeftFrontTurn, RobotMap.LeftFrontLimit);
-        RightFront = new SwerveModule2903(RobotMap.RightFrontForward, RobotMap.RightFrontTurn, RobotMap.RightFrontLimit);
+        RightFront = new SwerveModule2903(RobotMap.RightFrontForward, RobotMap.RightFrontTurn,
+                RobotMap.RightFrontLimit);
         RightRear = new SwerveModule2903(RobotMap.RightRearForward, RobotMap.RightRearTurn, RobotMap.RightRearLimit);
         LeftRear = new SwerveModule2903(RobotMap.LeftRearForward, RobotMap.LeftRearTurn, RobotMap.LeftRearLimit);
 
@@ -65,18 +67,20 @@ public class SwerveDrive2903 {
         }
 
         isForward = true;
-        SmartDashboard.putBoolean("Zeroin'",false);
+        SmartDashboard.putBoolean("Zeroin'", false);
+        targetTicks = 0;
         targetAngle = 0;
         for (SwerveModule2903 module : modules) {
-            module.TurnMotor.set(ControlMode.Position,0);
+            module.TurnMotor.set(ControlMode.Position, 0);
         }
     }
 
     public void zeroModules() {
+        targetTicks = 0;
         targetAngle = 0;
         for (SwerveModule2903 module : modules) {
             module.setEncoder(0);
-            module.TurnMotor.set(ControlMode.Position,0);
+            module.TurnMotor.set(ControlMode.Position, 0);
         }
     }
 
@@ -87,7 +91,7 @@ public class SwerveDrive2903 {
     public int joystickAngle(double x, double y) {
         int angle = -1;
         if (Math.abs(x) > joyDeadzone || Math.abs(y) > joyDeadzone) {
-            angle = (int)Math.toDegrees(Math.atan2(x, y));
+            angle = (int) Math.toDegrees(Math.atan2(x, y));
             if (angle < 0)
                 angle += 360;
         }
@@ -95,7 +99,13 @@ public class SwerveDrive2903 {
     }
 
     public double joystickMag(double x, double y) {
-        return Math.abs(Math.sqrt(x*x+y*y));
+        return Math.abs(Math.sqrt(x * x + y * y));
+    }
+
+    public int angleToTicks(int angle) {
+        double remainder = angle;// % DEG_PER_REV;
+        remainder /= DEG_PER_REV;
+        return (int) (remainder * TURN_TICKS_PER_REV);
     }
 
     public void setForward(double speed) {
@@ -103,25 +113,43 @@ public class SwerveDrive2903 {
             module.ForwardMotor.set(speed * (isForward ? 1 : -1));
     }
 
+    int loopCount = 0;
+
     public void setTurnDegrees(int degrees) {
-        if (degrees == -1) return;
-        int currentTargetTic = (int)LeftFront.TurnMotor.getClosedLoopTarget()-LeftFront.getLastJoyTurnTicks();
-        int localTic = LeftFront.angleToTicks(degrees) - currentTargetTic % TICKS_PER_REV;
-        if (localTic < -TICKS_PER_REV/2)
-            localTic += TICKS_PER_REV;
-        else if (localTic > TICKS_PER_REV/2)
-            localTic -= TICKS_PER_REV;
-        if (Math.abs(localTic) > TICKS_PER_REV/4) {
+        if (degrees == -1)
+            return;
+        int localTic = angleToTicks(degrees)
+                - (targetTicks % TURN_TICKS_PER_REV + (targetTicks < 0 ? TURN_TICKS_PER_REV : 0));
+        loopCount++;
+
+        if (localTic < -TURN_TICKS_PER_REV / 2)
+            localTic += TURN_TICKS_PER_REV;
+        else if (localTic > TURN_TICKS_PER_REV / 2)
+            localTic -= TURN_TICKS_PER_REV;
+
+        if (Math.abs(localTic) > TURN_TICKS_PER_REV / 4) {
             isForward = !isForward;
+            targetTicks += TURN_TICKS_PER_REV / 2 * (isForward ? 1 : -1);
             for (SwerveModule2903 module : modules) {
-                module.setEncoder(currentTargetTic + TICKS_PER_REV/2*(isForward ? 1 : -1));
-            module.TurnMotor.set(ControlMode.Position,currentTargetTic + TICKS_PER_REV/2*(isForward ? 1 : -1));
+                module.setEncoder(targetTicks + module.getLastJoyTurnTicks());
+                module.TurnMotor.set(targetTicks + module.getLastJoyTurnTicks());
             }
+            if (loopCount > 4)
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    // TODO Auto-generated catch block
+                    e.printStackTrace();
+                }
             setTurnDegrees(degrees);
             return;
         }
+
+        targetTicks += localTic;
+        loopCount = 0;
+
         for (SwerveModule2903 module : modules)
-            module.TurnMotor.set(ControlMode.Position,currentTargetTic+localTic+module.getJoyTurnTicks(degrees));
+            module.TurnMotor.set(ControlMode.Position,targetTicks + module.getJoyTurnTicks(degrees));
     }
 
     public void stopDrive() {
@@ -132,6 +160,10 @@ public class SwerveDrive2903 {
         }
     }
 
+    public double cleanAngle(double degrees) {
+        return (degrees % DEG_PER_REV + (degrees < 0 ? DEG_PER_REV : 0));
+    }
+
     public void swerveDrive(double power, double angle, double turn, boolean fieldCentric) {
 
         for (SwerveModule2903 module : modules)
@@ -139,7 +171,9 @@ public class SwerveDrive2903 {
         
         if (angle != -1) 
             targetAngle = (int)angle;
-        setTurnDegrees((int)(targetAngle-((fieldCentric)? Robot.navXSubsystem.turnAngle():0)));
+        double navXAngle = Robot.navXSubsystem.turnAngle();
+        navXAngle = cleanAngle(navXAngle);
+        setTurnDegrees((int)cleanAngle(targetAngle-((fieldCentric) ? navXAngle:0)));
 
         if (triggerDeadzone < Math.abs(power)) {
             setForward(power);
